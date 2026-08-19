@@ -1,0 +1,21 @@
+import { notFound } from "next/navigation";
+import { ReportView } from "@/components/audit/report-view";
+import { getSiteReport } from "@/lib/actions/sites";
+
+export const metadata = { title: "Audit report" };
+
+export default async function SiteReportPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const site = await getSiteReport(id);
+  if (!site) notFound();
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <ReportView websiteId={id} initial={site} />
+    </div>
+  );
+}
