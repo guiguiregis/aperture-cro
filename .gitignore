@@ -42,6 +42,9 @@ yarn-error.log*
 *.db
 *.db-journal
 
+# puppeteer
+/.cache/
+
 # vercel
 .vercel
 

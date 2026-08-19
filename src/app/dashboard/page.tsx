@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const websites = await getDashboardWebsites();
 
   return (
-    <div className="mx-auto h-full max-w-7xl space-y-8 overflow-y-auto">
+    <div className="mx-auto min-h-0 w-full max-w-7xl flex-1 space-y-8 overflow-y-auto">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Website audits</h1>
         <p className="mt-2 text-muted-foreground">

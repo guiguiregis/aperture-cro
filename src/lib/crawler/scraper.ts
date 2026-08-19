@@ -1,8 +1,48 @@
-import puppeteer, { type Browser } from "puppeteer";
+import { existsSync } from "node:fs";
+import puppeteer, { type Browser, type LaunchOptions } from "puppeteer";
 import type { CtaSnapshot, HeadingSnapshot, LoadTiming, ScrapedPage } from "@/types/audit";
 
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 ApertureCRO/1.0";
+
+const LAUNCH_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+];
+
+const LOCAL_CHROME_CANDIDATES = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
+];
+
+function localChromePath() {
+  return LOCAL_CHROME_CANDIDATES.find((path) => path && existsSync(path));
+}
+
+async function launchBrowser(): Promise<Browser> {
+  const options: LaunchOptions = { headless: true, args: LAUNCH_ARGS };
+
+  try {
+    return await puppeteer.launch(options);
+  } catch (bundledError) {
+    const executablePath = localChromePath();
+    if (executablePath) {
+      return await puppeteer.launch({ ...options, executablePath });
+    }
+    try {
+      return await puppeteer.launch({ ...options, channel: "chrome" });
+    } catch {
+      throw bundledError;
+    }
+  }
+}
 
 type BrowserExtract = Omit<ScrapedPage, "screenshot" | "url" | "finalUrl" | "timing">;
 
@@ -10,15 +50,7 @@ export async function scrapeWebsite(url: string): Promise<ScrapedPage> {
   let browser: Browser | null = null;
 
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    });
+    browser = await launchBrowser();
 
     const page = await browser.newPage();
     await page.setUserAgent(USER_AGENT);

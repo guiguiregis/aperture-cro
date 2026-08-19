@@ -155,34 +155,37 @@ export function ReportView({
   ) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="mb-2 px-0">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Button asChild variant="ghost" size="sm" className="mb-1 h-7 px-0">
             <Link href="/dashboard">
               <ArrowLeft className="h-4 w-4" />
               Back to dashboard
             </Link>
           </Button>
-          <h1 className="text-3xl font-semibold tracking-tight">{data.name}</h1>
-          <a
-            href={data.url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            {data.url}
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {data.lastAnalyzedAt
-              ? `Last analyzed ${format(data.lastAnalyzedAt, "MMM d, yyyy 'at' h:mm a")}`
-              : "Not analyzed yet"}
-          </p>
+          <h1 className="truncate text-2xl font-semibold tracking-tight">{data.name}</h1>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            <a
+              href={data.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-w-0 items-center gap-1 truncate hover:text-foreground"
+            >
+              <span className="truncate">{data.url}</span>
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+            <span className="hidden sm:inline">·</span>
+            <span>
+              {data.lastAnalyzedAt
+                ? `Analyzed ${format(data.lastAnalyzedAt, "MMM d, yyyy 'at' h:mm a")}`
+                : "Not analyzed yet"}
+            </span>
+          </div>
         </div>
-        <Button onClick={onReanalyze} disabled={inFlight}>
+        <Button onClick={onReanalyze} disabled={inFlight} size="sm" className="shrink-0">
           <RefreshCw className={inFlight ? "animate-spin" : ""} />
-          Re-Analyze Site
+          Re-Analyze
         </Button>
       </div>
 
@@ -191,27 +194,36 @@ export function ReportView({
       ) : null}
 
       {data.status === "FAILED" ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <p className="shrink-0 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {data.statusMessage ?? "The crawl failed. Check the URL and try again."}
         </p>
       ) : null}
 
+      {data.status === "COMPLETE" && data.statusMessage ? (
+        <div className="shrink-0 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <p>{data.statusMessage}</p>
+          <Link href="/dashboard/settings" className="mt-2 inline-block font-medium underline underline-offset-2">
+            Update API keys in Settings
+          </Link>
+        </div>
+      ) : null}
+
       {data.report ? (
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(200px,42vh)_minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(320px,42%)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row">
           {data.report.screenshotUrl ? (
             <ScreenshotPreview
-              className="h-full min-h-0"
+              className="h-72 w-full min-h-0 shrink-0 lg:h-full lg:w-[42%] lg:max-w-[520px] lg:flex-none"
               src={data.report.screenshotUrl}
               overlays={data.report.metrics.overlays ?? []}
               activeId={activeFindingId}
               onSelect={selectFinding}
             />
           ) : (
-            <div className="flex h-full min-h-0 items-center justify-center rounded-2xl border border-dashed text-sm text-muted-foreground">
+            <div className="flex h-72 w-full shrink-0 items-center justify-center rounded-2xl border border-dashed text-sm text-muted-foreground lg:h-full lg:w-[42%] lg:max-w-[520px] lg:flex-none">
               Screenshot not captured
             </div>
           )}
-          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain pr-1">
+          <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
             {reportSections}
           </div>
         </div>

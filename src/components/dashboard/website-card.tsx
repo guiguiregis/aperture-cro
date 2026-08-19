@@ -104,7 +104,16 @@ export function WebsiteCard({ site }: { site: WebsiteCardData }) {
             {site.statusMessage ?? "Audit failed. Try re-analyzing."}
           </p>
         ) : (
-          <div className="rounded-lg border bg-secondary/40 p-3">
+          <>
+            {site.statusMessage ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                {site.statusMessage}{" "}
+                <Link href="/dashboard/settings" className="font-medium underline underline-offset-2">
+                  Settings
+                </Link>
+              </p>
+            ) : null}
+            <div className="rounded-lg border bg-secondary/40 p-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Top 3 quick fixes
             </p>
@@ -122,6 +131,7 @@ export function WebsiteCard({ site }: { site: WebsiteCardData }) {
               ) : null}
             </ul>
           </div>
+          </>
         )}
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm">
