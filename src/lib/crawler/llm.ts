@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { heuristicAudit } from "@/lib/crawler/heuristics";
+import { classifyLlmError, type ClassifiedLlmError } from "@/lib/crawler/llm-error";
 import { llmAuditSchema, SYSTEM_PROMPT } from "@/lib/crawler/schema";
 import { serializeScrapeForLlm } from "@/lib/crawler/scraper";
 import { clampScore } from "@/lib/utils";
@@ -92,28 +93,50 @@ async function analyzeWithAnthropic(
 export async function analyzeCRO(
   scrape: ScrapedPage,
   keys: LlmKeys,
-): Promise<{ result: LlmAuditResult; engine: "openai" | "anthropic" | "heuristic" }> {
+): Promise<{
+  result: LlmAuditResult;
+  engine: "openai" | "anthropic" | "heuristic";
+  issues: ClassifiedLlmError[];
+  okProviders: Array<{ provider: "openai" | "anthropic"; source: "user" | "env" }>;
+}> {
   const fallback = heuristicAudit(scrape);
+  const issues: ClassifiedLlmError[] = [];
+  const okProviders: Array<{ provider: "openai" | "anthropic"; source: "user" | "env" }> = [];
+
+  const openaiSource: "user" | "env" | null = keys.openaiApiKey
+    ? "user"
+    : process.env.OPENAI_API_KEY
+      ? "env"
+      : null;
   const openaiKey = keys.openaiApiKey || process.env.OPENAI_API_KEY;
+  const anthropicSource: "user" | "env" | null = keys.anthropicApiKey
+    ? "user"
+    : process.env.ANTHROPIC_API_KEY
+      ? "env"
+      : null;
   const anthropicKey = keys.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
 
-  if (openaiKey) {
+  if (openaiKey && openaiSource) {
     try {
       const raw = await analyzeWithOpenAI(scrape, openaiKey);
-      return { result: normalizeResult(raw, fallback), engine: "openai" };
+      okProviders.push({ provider: "openai", source: openaiSource });
+      return { result: normalizeResult(raw, fallback), engine: "openai", issues, okProviders };
     } catch (error) {
       console.error("OpenAI CRO analysis failed", error);
+      issues.push(classifyLlmError(error, "openai", openaiSource));
     }
   }
 
-  if (anthropicKey) {
+  if (anthropicKey && anthropicSource) {
     try {
       const raw = await analyzeWithAnthropic(scrape, anthropicKey);
-      return { result: normalizeResult(raw, fallback), engine: "anthropic" };
+      okProviders.push({ provider: "anthropic", source: anthropicSource });
+      return { result: normalizeResult(raw, fallback), engine: "anthropic", issues, okProviders };
     } catch (error) {
       console.error("Anthropic CRO analysis failed", error);
+      issues.push(classifyLlmError(error, "anthropic", anthropicSource));
     }
   }
 
-  return { result: fallback, engine: "heuristic" };
+  return { result: fallback, engine: "heuristic", issues, okProviders };
 }

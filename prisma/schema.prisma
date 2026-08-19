@@ -38,6 +38,10 @@ model User {
   plan            PlanTier  @default(FREE)
   openaiApiKey    String?
   anthropicApiKey String?
+  openaiKeyStatus     String?
+  anthropicKeyStatus  String?
+  llmStatusMessage    String?
+  llmStatusUpdatedAt  DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   websites        Website[]

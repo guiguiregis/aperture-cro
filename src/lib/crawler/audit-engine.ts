@@ -4,6 +4,7 @@ import { flagImageIssues } from "@/lib/crawler/image-issues";
 import { scrapeWebsite } from "@/lib/crawler/scraper";
 import { buildSiteMap } from "@/lib/crawler/site-map";
 import { prisma } from "@/lib/db";
+import { setLlmKeyHealth } from "@/lib/llm-key-health";
 import { saveScreenshot } from "@/lib/storage";
 import { scoreCategory } from "@/lib/utils";
 import type { AuditMetrics, OverlayMarker, Suggestion } from "@/types/audit";
@@ -75,10 +76,41 @@ export async function runAuditEngine(websiteId: string): Promise<void> {
     });
 
     await setStatus(websiteId, "GENERATING", "Generating Report...");
-    const { result } = await analyzeCRO(scrape, {
+    const { result, engine, issues, okProviders } = await analyzeCRO(scrape, {
       openaiApiKey: website.user.openaiApiKey,
       anthropicApiKey: website.user.anthropicApiKey,
     });
+
+    const userKeyUpdates = {
+      openaiKeyStatus: null as string | null,
+      anthropicKeyStatus: null as string | null,
+      llmStatusMessage: null as string | null,
+      llmStatusUpdatedAt: new Date() as Date | null,
+    };
+    for (const ok of okProviders) {
+      if (ok.source !== "user") continue;
+      if (ok.provider === "openai") userKeyUpdates.openaiKeyStatus = "ok";
+      if (ok.provider === "anthropic") userKeyUpdates.anthropicKeyStatus = "ok";
+    }
+    for (const issue of issues) {
+      if (issue.source !== "user") continue;
+      if (issue.provider === "openai") userKeyUpdates.openaiKeyStatus = issue.kind;
+      if (issue.provider === "anthropic") userKeyUpdates.anthropicKeyStatus = issue.kind;
+    }
+    const warning =
+      issues.length === 0
+        ? null
+        : engine === "heuristic"
+          ? `${issues.map((issue) => issue.message).join(" ")} This report used rule-based heuristics instead of the LLM.`
+          : issues.map((issue) => issue.message).join(" ");
+    userKeyUpdates.llmStatusMessage = warning;
+
+    const touchedUserKey =
+      okProviders.some((item) => item.source === "user") ||
+      issues.some((issue) => issue.source === "user");
+    if (touchedUserKey) {
+      await setLlmKeyHealth(website.userId, userKeyUpdates);
+    }
 
     const overlays = buildOverlays(result.suggestions, scrape);
     const metrics: AuditMetrics = {
@@ -101,7 +133,7 @@ export async function runAuditEngine(websiteId: string): Promise<void> {
       },
     });
 
-    await setStatus(websiteId, "COMPLETE", null, {
+    await setStatus(websiteId, "COMPLETE", warning, {
       lastAnalyzedAt: new Date(),
       thumbnailUrl: screenshotUrl,
     });
