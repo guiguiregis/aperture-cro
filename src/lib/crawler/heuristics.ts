@@ -68,11 +68,49 @@ export function heuristicAudit(page: ScrapedPage): LlmAuditResult {
     conversionFlow -= 10;
   }
 
-  const performance = clampScore(
-    78 -
-      Math.min(18, Math.floor(page.images.length / 8) * 3) -
-      (page.documentSize.height > 12_000 ? 8 : 0),
-  );
+  const { ttfbMs, lcpMs, loadMs, requestCount, transferBytes, imageBytes } =
+    page.timing;
+
+  let performance = 86;
+  if (lcpMs != null) {
+    if (lcpMs > 4000) performance -= 30;
+    else if (lcpMs > 2500) performance -= 16;
+    else if (lcpMs <= 1800) performance += 6;
+  }
+  if (ttfbMs != null) {
+    if (ttfbMs > 1800) performance -= 16;
+    else if (ttfbMs > 800) performance -= 8;
+  }
+  if (loadMs != null && loadMs > 5000) performance -= 10;
+  if (requestCount > 90) performance -= 8;
+  if (transferBytes > 3_000_000) performance -= 10;
+  performance -= Math.min(8, Math.floor(page.images.length / 12) * 2);
+  if (page.documentSize.height > 12_000) performance -= 4;
+  performance = clampScore(performance);
+
+  const titleLen = page.title.trim().length;
+  const descLen = page.meta.description?.trim().length ?? 0;
+  const robots = page.meta.robots?.toLowerCase() ?? "";
+  const hasJsonLd = page.jsonLdRaw.length > 0;
+  let seo = 58;
+  if (titleLen >= 30 && titleLen <= 60) seo += 12;
+  else if (titleLen === 0) seo -= 22;
+  else seo -= 8;
+  if (descLen >= 120 && descLen <= 165) seo += 12;
+  else if (descLen === 0) seo -= 16;
+  else if (descLen < 70 || descLen > 180) seo -= 8;
+  if (h1s.length === 1) seo += 8;
+  else seo -= 10;
+  if (page.meta.canonical) seo += 6;
+  else seo -= 8;
+  if (robots.includes("noindex")) seo -= 24;
+  if (page.meta.htmlLang) seo += 4;
+  else seo -= 6;
+  if (page.meta.ogTitle && page.meta.ogImage) seo += 6;
+  else seo -= 6;
+  if (hasJsonLd) seo += 8;
+  else seo -= 8;
+  if (missingAlt > 0) seo -= Math.min(10, missingAlt * 2);
 
   const metrics = {
     performance,
@@ -81,15 +119,17 @@ export function heuristicAudit(page: ScrapedPage): LlmAuditResult {
     accessibility: clampScore(accessibility),
     ctaPlacement: clampScore(ctaPlacement),
     conversionFlow: clampScore(conversionFlow),
+    seo: clampScore(seo),
   };
 
   const overallScore = clampScore(
-    metrics.visualHierarchy * 0.2 +
-      metrics.ctaPlacement * 0.22 +
-      metrics.conversionFlow * 0.2 +
-      metrics.typography * 0.14 +
-      metrics.accessibility * 0.14 +
-      metrics.performance * 0.1,
+    metrics.visualHierarchy * 0.14 +
+      metrics.ctaPlacement * 0.16 +
+      metrics.conversionFlow * 0.16 +
+      metrics.typography * 0.12 +
+      metrics.accessibility * 0.12 +
+      metrics.performance * 0.14 +
+      metrics.seo * 0.16,
   );
 
   const suggestions: Suggestion[] = [];
@@ -165,8 +205,8 @@ h1, h2 { font-family: var(--font-display); }`,
   if (!page.meta.description) {
     suggestions.push({
       title: "Write a conversion-oriented meta description",
-      category: "Conversion Flow",
-      impact: "MEDIUM",
+      category: "SEO Meta Description",
+      impact: "HIGH",
       selector: 'head > meta[name="description"]',
       reasoning:
         "Search and social snippets are the first CTA. A missing meta description wastes qualified traffic before the page even loads.",
@@ -175,6 +215,98 @@ h1, h2 { font-family: var(--font-display); }`,
   name="description"
   content="Audit any landing page in 60 seconds. Get a CRO score, CTA fixes, and copy-paste UI improvements."
 />`,
+    });
+  } else if (descLen < 70 || descLen > 180) {
+    suggestions.push({
+      title: "Resize the meta description for SERP click-through",
+      category: "SEO Meta Description",
+      impact: "MEDIUM",
+      selector: 'head > meta[name="description"]',
+      reasoning: `Meta description is ${descLen} characters. Google typically displays ~140–160 characters; too short wastes snippet space and too long gets truncated.`,
+      currentCodeSnippet: `<meta name="description" content="${page.meta.description}" />`,
+      suggestedCodeSnippet: `<meta
+  name="description"
+  content="Get a 0–100 CRO score plus copy-paste UI, CTA, and SEO fixes in one crawl. Start free — no credit card."
+/>`,
+    });
+  }
+
+  if (titleLen === 0 || titleLen < 30 || titleLen > 65) {
+    suggestions.push({
+      title: "Rewrite the title tag for search and conversion",
+      category: "SEO Title",
+      impact: "HIGH",
+      selector: "head > title",
+      reasoning:
+        titleLen === 0
+          ? "The document has no title tag, so search results and browser tabs have nothing to rank or click."
+          : `Title is ${titleLen} characters. Aim for 50–60 with the primary keyword near the front and a benefit in the second half.`,
+      currentCodeSnippet: `<title>${page.title || ""}</title>`,
+      suggestedCodeSnippet: `<title>AI CRO Audit | Score Any Landing Page in 60 Seconds</title>`,
+    });
+  }
+
+  if (!page.meta.canonical) {
+    suggestions.push({
+      title: "Add a self-referencing canonical URL",
+      category: "SEO Canonical",
+      impact: "MEDIUM",
+      selector: 'head > link[rel="canonical"]',
+      reasoning:
+        "Without a canonical, duplicate URLs (trailing slash, UTM, www) can split ranking signals and confuse which page should convert.",
+      currentCodeSnippet: "<head><!-- no canonical --></head>",
+      suggestedCodeSnippet: `<link rel="canonical" href="${page.finalUrl.split("?")[0]}" />`,
+    });
+  }
+
+  if (robots.includes("noindex")) {
+    suggestions.push({
+      title: "Remove noindex unless this page should stay hidden",
+      category: "SEO Indexability",
+      impact: "HIGH",
+      selector: 'head > meta[name="robots"]',
+      reasoning:
+        "robots contains noindex, so Google will not rank this URL. If this is a public landing or product page, that blocks organic acquisition entirely.",
+      currentCodeSnippet: `<meta name="robots" content="${page.meta.robots}" />`,
+      suggestedCodeSnippet: `<meta name="robots" content="index, follow" />`,
+    });
+  }
+
+  if (!page.meta.htmlLang) {
+    suggestions.push({
+      title: "Set the document language",
+      category: "SEO Language",
+      impact: "LOW",
+      selector: "html",
+      reasoning:
+        "A missing lang attribute hurts accessibility and can confuse search engines about the target market.",
+      currentCodeSnippet: "<html>",
+      suggestedCodeSnippet: `<html lang="en">`,
+    });
+  }
+
+  if (!hasJsonLd) {
+    suggestions.push({
+      title: "Add JSON-LD structured data",
+      category: "SEO Structured Data",
+      impact: "MEDIUM",
+      selector: 'script[type="application/ld+json"]',
+      reasoning:
+        "No JSON-LD was detected. Organization, Product, or SoftwareApplication schema helps rich results and clarifies the offer to search engines.",
+      currentCodeSnippet: "<head><!-- no JSON-LD --></head>",
+      suggestedCodeSnippet: `<script type="application/ld+json">
+${JSON.stringify(
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: page.title || "Product",
+    url: page.finalUrl,
+    description: page.meta.description ?? page.headings[0]?.text ?? "",
+  },
+  null,
+  2,
+)}
+</script>`,
     });
   }
 
@@ -222,6 +354,53 @@ background-color: ${primaryCta.styles.backgroundColor};`,
     }
   }
 
+  if (lcpMs != null && lcpMs > 2500) {
+    suggestions.push({
+      title: "Improve Largest Contentful Paint",
+      category: "Page Speed",
+      impact: lcpMs > 4000 ? "HIGH" : "MEDIUM",
+      selector: "img, video, [data-hero]",
+      reasoning: `LCP was ${(lcpMs / 1000).toFixed(2)}s (good is under 2.5s). A slow hero delays the first meaningful paint, so visitors bounce before they see the CTA.`,
+      currentCodeSnippet: `<img src="/hero.jpg" />`,
+      suggestedCodeSnippet: `<img
+  src="/hero.webp"
+  alt="Product hero"
+  width="1440"
+  height="900"
+  fetchPriority="high"
+  decoding="async"
+/>`,
+    });
+  }
+
+  if (ttfbMs != null && ttfbMs > 800) {
+    suggestions.push({
+      title: "Reduce time to first byte",
+      category: "Page Speed",
+      impact: ttfbMs > 1800 ? "HIGH" : "MEDIUM",
+      selector: "html",
+      reasoning: `TTFB was ${ttfbMs}ms (good is under 800ms). Slow server/CDN response delays every conversion event that follows.`,
+      currentCodeSnippet: "<!-- HTML served after a slow origin round-trip -->",
+      suggestedCodeSnippet: `Cache-Control: public, max-age=60, stale-while-revalidate=600
+# Prefer an edge CDN / SSR cache for the landing HTML
+# Keep origin TTFB < 800ms`,
+    });
+  }
+
+  if (transferBytes > 2_500_000 || requestCount > 80) {
+    suggestions.push({
+      title: "Cut page weight and request count",
+      category: "Page Speed",
+      impact: "MEDIUM",
+      selector: "script[src], img, link[rel='stylesheet']",
+      reasoning: `The crawl transferred ~${Math.round(transferBytes / 1024)}KB across ${requestCount} requests (${Math.round(imageBytes / 1024)}KB images). Extra weight slows LCP and mobile conversion.`,
+      currentCodeSnippet: `<script src="/vendor.js"></script>
+<img src="/hero.png" />`,
+      suggestedCodeSnippet: `<script src="/vendor.js" defer></script>
+<img src="/hero.webp" loading="lazy" width="800" height="500" alt="" />`,
+    });
+  }
+
   if (suggestions.length < 5) {
     suggestions.push({
       title: "Clarify the above-the-fold value proposition",
@@ -266,8 +445,8 @@ background-color: ${primaryCta.styles.backgroundColor};`,
       ? "No obvious call-to-action was detected, which stalls the conversion path immediately."
       : `Interactive density is ${page.ctas.length} elements; tighten hierarchy so one action owns the fold.`
     ,
-    missingAlt > 0 || !page.meta.description
-      ? "Accessibility and snippet metadata are incomplete, which quietly taxes both trust and inbound conversion."
+    missingAlt > 0 || !page.meta.description || titleLen < 30
+      ? "SEO metadata is incomplete (title, description, or image alts), which quietly taxes both organic traffic and inbound conversion."
       : "Typography, contrast, and form friction are the highest-leverage remaining CRO wins.",
   ];
 
@@ -275,6 +454,6 @@ background-color: ${primaryCta.styles.backgroundColor};`,
     overallScore,
     summaryPoints,
     metrics,
-    suggestions: suggestions.slice(0, 8),
+    suggestions: suggestions.slice(0, 10),
   };
 }

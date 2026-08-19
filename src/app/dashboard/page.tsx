@@ -8,11 +8,11 @@ export default async function DashboardPage() {
   const websites = await getDashboardWebsites();
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8">
+    <div className="mx-auto h-full max-w-7xl space-y-8 overflow-y-auto">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Website audits</h1>
         <p className="mt-2 text-muted-foreground">
-          Enter a URL to crawl the live DOM and generate a CRO performance report.
+          Enter a URL to crawl the live DOM and generate a CRO, SEO, and page-speed report.
         </p>
       </div>
       <UrlForm />

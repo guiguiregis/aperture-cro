@@ -85,6 +85,27 @@ export async function createWebsiteAndAnalyze(rawUrl: string) {
     return { error: "Enter a valid HTTP or HTTPS URL." };
   }
 
+  const existing = await prisma.website.findFirst({
+    where: { userId, url },
+  });
+
+  if (existing) {
+    await prisma.website.update({
+      where: { id: existing.id },
+      data: { status: "SCRAPING", statusMessage: "Scraping DOM..." },
+    });
+    after(async () => {
+      try {
+        await runAuditEngine(existing.id);
+      } catch (error) {
+        console.error("Audit engine failed", error);
+      }
+    });
+    revalidatePath("/dashboard");
+    revalidatePath(`/dashboard/sites/${existing.id}`);
+    return { id: existing.id };
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { plan: true, _count: { select: { websites: true } } },

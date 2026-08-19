@@ -28,7 +28,12 @@ export function WebsiteCard({ site }: { site: WebsiteCardData }) {
   const router = useRouter();
   const inFlight = analyzing.has(site.status);
   const topFixes = (site.latest?.suggestions ?? []).slice(0, 3);
-  const summaryPoints = site.latest?.summary.split("\n").filter(Boolean).slice(0, 3) ?? [];
+  const summaryPoints =
+    site.latest?.summary
+      .split("\n")
+      .map((point) => point.trim())
+      .filter(Boolean)
+      .slice(0, 3) ?? [];
 
   async function onReanalyze() {
     const result = await reanalyzeWebsite(site.id);
@@ -105,8 +110,8 @@ export function WebsiteCard({ site }: { site: WebsiteCardData }) {
             </p>
             <ul className="space-y-2 text-sm">
               {(topFixes.length ? topFixes.map((item) => item.title) : summaryPoints).map(
-                (item) => (
-                  <li key={item} className="flex gap-2">
+                (item, index) => (
+                  <li key={`fix-${index}`} className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                     <span>{item}</span>
                   </li>

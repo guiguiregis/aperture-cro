@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -7,6 +8,9 @@ import { format } from "date-fns";
 import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AnalysisProgress } from "@/components/audit/analysis-progress";
+import { CollapsibleSection } from "@/components/audit/collapsible-section";
+import { DiscoveredPages } from "@/components/audit/discovered-pages";
+import { ImageIssuesGrid } from "@/components/audit/image-issues-grid";
 import { MetricsPanel } from "@/components/audit/metrics-panel";
 import { ScoreGauge } from "@/components/audit/score-gauge";
 import { ScreenshotPreview } from "@/components/audit/screenshot-preview";
@@ -39,6 +43,19 @@ export function ReportView({
   });
 
   const inFlight = analyzing.has(data.status);
+  const [activeFindingId, setActiveFindingId] = useState<string | null>(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(true);
+
+  function selectFinding(id: string) {
+    setActiveFindingId(id);
+    setSuggestionsOpen(true);
+    window.setTimeout(() => {
+      document.getElementById(`suggestion-${id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 60);
+  }
 
   async function onReanalyze() {
     const result = await reanalyzeWebsite(websiteId);
@@ -50,13 +67,98 @@ export function ReportView({
     router.refresh();
   }
 
-  const summaryPoints = data.report?.summary.split("\n").filter(Boolean) ?? [];
+  const summaryPoints =
+    data.report?.summary
+      .split("\n")
+      .map((point) => point.trim())
+      .filter(Boolean) ?? [];
+
+  const reportSections = data.report ? (
+    <>
+      <CollapsibleSection title="Overview" description="Overall score and executive takeaways">
+        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+          <Card className="flex items-center justify-center p-6">
+            <div className="text-center">
+              <ScoreGauge score={data.report.overallScore} />
+              <ScoreBadge
+                className="mt-2"
+                score={data.report.overallScore}
+                category={data.report.scoreCategory}
+              />
+            </div>
+          </Card>
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <h2 className="text-lg font-semibold">Executive summary</h2>
+              <ol className="space-y-3">
+                {summaryPoints.map((point, index) => (
+                  <li key={`summary-${index}`} className="flex gap-3 text-sm leading-6">
+                    <span className="mt-0.5 w-5 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                      {index + 1}.
+                    </span>
+                    {point}
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Score breakdown">
+        <MetricsPanel metrics={data.report.metrics} />
+      </CollapsibleSection>
+
+      {data.report.metrics.imageIssues?.length ? (
+        <CollapsibleSection
+          title="Images that need work"
+          description="Missing alt text, oversized files, or slow loading attributes"
+          count={data.report.metrics.imageIssues.length}
+        >
+          <ImageIssuesGrid images={data.report.metrics.imageIssues} hideHeader />
+        </CollapsibleSection>
+      ) : null}
+
+      {data.report.metrics.siteMap ? (
+        <CollapsibleSection
+          title="Pages on this site"
+          description={`Inferred from nav, JSON-LD, and sitemap · this crawl audited a ${data.report.metrics.siteMap.currentKind} page`}
+          count={data.report.metrics.siteMap.pages.length}
+        >
+          <DiscoveredPages siteMap={data.report.metrics.siteMap} hideHeader />
+        </CollapsibleSection>
+      ) : null}
+
+      <CollapsibleSection
+        title="Detailed suggestions"
+        description="Numbered pins on the page preview map to these cards. Click a pin to jump here."
+        count={data.report.suggestions.length}
+        open={suggestionsOpen}
+        onOpenChange={setSuggestionsOpen}
+      >
+        <div className="space-y-4">
+          {data.report.suggestions.map((suggestion, index) => {
+            const marker = data.report?.metrics.overlays?.[index];
+            return (
+              <SuggestionCard
+                key={`${suggestion.selector}-${suggestion.title}`}
+                suggestion={suggestion}
+                markerId={marker?.id}
+                active={marker ? activeFindingId === marker.id : false}
+                onSelect={marker ? () => selectFinding(marker.id) : undefined}
+              />
+            );
+          })}
+        </div>
+      </CollapsibleSection>
+    </>
+  ) : null;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div>
-          <Button asChild variant="ghost" size="sm" className="mb-3 px-0">
+          <Button asChild variant="ghost" size="sm" className="mb-2 px-0">
             <Link href="/dashboard">
               <ArrowLeft className="h-4 w-4" />
               Back to dashboard
@@ -95,59 +197,24 @@ export function ReportView({
       ) : null}
 
       {data.report ? (
-        <>
-          <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-            <Card className="flex items-center justify-center p-6">
-              <div className="text-center">
-                <ScoreGauge score={data.report.overallScore} />
-                <ScoreBadge
-                  className="mt-2"
-                  score={data.report.overallScore}
-                  category={data.report.scoreCategory}
-                />
-              </div>
-            </Card>
-            <Card>
-              <CardContent className="space-y-4 p-6">
-                <h2 className="text-lg font-semibold">Executive summary</h2>
-                <ol className="space-y-3">
-                  {summaryPoints.map((point, index) => (
-                    <li key={point} className="flex gap-3 text-sm leading-6">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                        {index + 1}
-                      </span>
-                      {point}
-                    </li>
-                  ))}
-                </ol>
-              </CardContent>
-            </Card>
-          </div>
-
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold">Score breakdown</h2>
-            <MetricsPanel metrics={data.report.metrics} />
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold">Detailed suggestions</h2>
-            <div className="space-y-4">
-              {data.report.suggestions.map((suggestion) => (
-                <SuggestionCard
-                  key={`${suggestion.selector}-${suggestion.title}`}
-                  suggestion={suggestion}
-                />
-              ))}
-            </div>
-          </section>
-
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(200px,42vh)_minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(320px,42%)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
           {data.report.screenshotUrl ? (
             <ScreenshotPreview
+              className="h-full min-h-0"
               src={data.report.screenshotUrl}
               overlays={data.report.metrics.overlays ?? []}
+              activeId={activeFindingId}
+              onSelect={selectFinding}
             />
-          ) : null}
-        </>
+          ) : (
+            <div className="flex h-full min-h-0 items-center justify-center rounded-2xl border border-dashed text-sm text-muted-foreground">
+              Screenshot not captured
+            </div>
+          )}
+          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain pr-1">
+            {reportSections}
+          </div>
+        </div>
       ) : !inFlight ? (
         <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           No report yet. Launch a crawl to generate CRO recommendations.

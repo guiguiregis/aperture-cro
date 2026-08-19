@@ -6,7 +6,7 @@ import type { WebsiteStatus } from "@/types/audit";
 
 const steps: { status: WebsiteStatus; label: string }[] = [
   { status: "SCRAPING", label: "Scraping DOM..." },
-  { status: "ANALYZING", label: "Analyzing CRO heuristics..." },
+  { status: "ANALYZING", label: "Analyzing CRO & SEO heuristics..." },
   { status: "GENERATING", label: "Generating Report..." },
 ];
 

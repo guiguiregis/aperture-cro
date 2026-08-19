@@ -14,7 +14,7 @@ export default async function SiteReportPage({
   if (!site) notFound();
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <ReportView websiteId={id} initial={site} />
     </div>
   );

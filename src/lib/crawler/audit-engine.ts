@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { analyzeCRO } from "@/lib/crawler/llm";
+import { flagImageIssues } from "@/lib/crawler/image-issues";
 import { scrapeWebsite } from "@/lib/crawler/scraper";
+import { buildSiteMap } from "@/lib/crawler/site-map";
 import { prisma } from "@/lib/db";
 import { saveScreenshot } from "@/lib/storage";
 import { scoreCategory } from "@/lib/utils";
@@ -63,7 +65,12 @@ export async function runAuditEngine(websiteId: string): Promise<void> {
     const scrape = await scrapeWebsite(website.url);
     const screenshotUrl = await saveScreenshot(websiteId, scrape.screenshot);
 
-    await setStatus(websiteId, "ANALYZING", "Analyzing CRO heuristics...", {
+    await setStatus(websiteId, "SCRAPING", "Mapping site pages...", {
+      thumbnailUrl: screenshotUrl,
+    });
+    const siteMap = await buildSiteMap(scrape);
+
+    await setStatus(websiteId, "ANALYZING", "Analyzing CRO & SEO heuristics...", {
       thumbnailUrl: screenshotUrl,
     });
 
@@ -77,6 +84,9 @@ export async function runAuditEngine(websiteId: string): Promise<void> {
     const metrics: AuditMetrics = {
       ...result.metrics,
       overlays,
+      siteMap,
+      loadTiming: scrape.timing,
+      imageIssues: flagImageIssues(scrape.images),
     };
 
     await prisma.auditReport.create({

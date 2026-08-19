@@ -28,6 +28,7 @@ function normalizeResult(raw: unknown, fallback: LlmAuditResult): LlmAuditResult
       accessibility: clampScore(parsed.data.metrics.accessibility),
       ctaPlacement: clampScore(parsed.data.metrics.ctaPlacement),
       conversionFlow: clampScore(parsed.data.metrics.conversionFlow),
+      seo: clampScore(parsed.data.metrics.seo),
     },
   };
 }
@@ -46,7 +47,7 @@ async function analyzeWithOpenAI(
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Audit this crawled page for CRO opportunities.\n\n${serializeScrapeForLlm(scrape)}`,
+        content: `Audit this crawled page for CRO, SEO, and page-speed opportunities.\n\n${serializeScrapeForLlm(scrape)}`,
       },
     ],
     response_format: zodResponseFormat(llmAuditSchema, "cro_audit"),
@@ -70,7 +71,7 @@ async function analyzeWithAnthropic(
     messages: [
       {
         role: "user",
-        content: `Audit this crawled page for CRO opportunities. Return ONLY JSON matching the schema.\n\n${serializeScrapeForLlm(scrape)}\n\nJSON schema keys: overallScore, summaryPoints[3], metrics{performance,visualHierarchy,typography,accessibility,ctaPlacement,conversionFlow}, suggestions[{title,category,impact,selector,reasoning,currentCodeSnippet,suggestedCodeSnippet}]`,
+        content: `Audit this crawled page for CRO, SEO, and page-speed opportunities. Return ONLY JSON matching the schema.\n\n${serializeScrapeForLlm(scrape)}\n\nJSON schema keys: overallScore, summaryPoints[3], metrics{performance,visualHierarchy,typography,accessibility,ctaPlacement,conversionFlow,seo}, suggestions[{title,category,impact,selector,reasoning,currentCodeSnippet,suggestedCodeSnippet}]`,
       },
     ],
   });

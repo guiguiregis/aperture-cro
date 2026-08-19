@@ -71,7 +71,7 @@ export default async function HomePage() {
             {
               icon: Gauge,
               title: "CRO score",
-              body: "Typography, CTA placement, hierarchy, accessibility, and conversion flow are scored 0–100.",
+              body: "Typography, CTA placement, hierarchy, SEO snippets, page load (LCP/TTFB), and conversion flow are scored 0–100.",
             },
             {
               icon: Layers3,
@@ -95,6 +95,7 @@ export default async function HomePage() {
               <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
                 <li>Overall CRO score with Poor / Medium / Good banding</li>
                 <li>Three executive takeaways for stakeholders</li>
+                <li>On-page SEO: title, meta, canonical, Open Graph, JSON-LD</li>
                 <li>5–10 selector-level suggestions with impact tags</li>
                 <li>Screenshot overlay markers on problem areas</li>
               </ul>
