@@ -50,7 +50,7 @@ The seeded user is on the **PRO** plan (unlimited sites). Registering a new acco
 **Requirements:** Node.js 20+ (22+ recommended). Chromium is downloaded with Puppeteer on `npm install`.
 
 ```bash
-git clone https://github.com/<your-user>/aperture-cro.git
+git clone https://github.com/guiguiregis/aperture-cro.git
 cd aperture-cro
 cp .env.example .env
 # Generate a signing secret:
